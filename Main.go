@@ -11,12 +11,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	// "strings"
-	"time"
 )
 
 var Wnd nucular.MasterWindow
-var Wut = "hllo"
 
 var Title = "Gostman"
 
@@ -25,7 +22,7 @@ func main() {
 	Wnd = nucular.NewMasterWindow(0, Title, textEditorDemo())
 
 	if Wnd == nil {
-		_, _ = fmt.Fprintf(os.Stderr, "unknown demo %q\n", Wut)
+		_, _ = fmt.Fprintf(os.Stderr, "unknown demo %q\n", "WUT")
 		_, _ = fmt.Fprintf(os.Stderr, "ggggg\n")
 		os.Exit(1)
 	}
@@ -33,17 +30,9 @@ func main() {
 	Wnd.Main()
 }
 
-var compression int
-
-type difficulty int
-
-const (
-	easy = difficulty(iota)
-	hard
-)
-
-var op difficulty = easy
 var status = 0
+var responseContentType string
+var tabbableFields [3]*nucular.TextEditor
 
 type Pair struct {
 	a, b string
@@ -56,43 +45,114 @@ var httpMethod = "GET"
 
 func textEditorDemo() func(w *nucular.Window) {
 
-	var textEditorEditor nucular.TextEditor
-	textEditorEditor.Flags = nucular.EditSelectable
-	textEditorEditor.Buffer = []rune("https://google.se/API/version")
-	textEditorEditor.Maxlen = 150
+	var urlEditorField nucular.TextEditor
+	urlEditorField.Flags = nucular.EditSelectable
+	urlEditorField.Buffer = []rune("https://google.se/API/version")
+	urlEditorField.Maxlen = 1000
+	urlEditorField.Active = true
+	tabbableFields[0] = &urlEditorField
+
+	var requestBodyEditorField nucular.TextEditor
+	requestBodyEditorField.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditClipboard | nucular.EditIbeamCursor
+	requestBodyEditorField.Buffer = []rune("request body")
+	requestBodyEditorField.Maxlen = 150
+	tabbableFields[1] = &requestBodyEditorField
+
 
 	var responseBodyEditor nucular.TextEditor
 	responseBodyEditor.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditClipboard | nucular.EditIbeamCursor
-	responseBodyEditor.Buffer = []rune("responsebody")
+
+	responseBodyEditor.Buffer = []rune("response body")
+
+	tabbableFields[2] = &responseBodyEditor
 
 	return func(w *nucular.Window) {
 
-		keybindings(w, &textEditorEditor, &responseBodyEditor)
+		keybindings(w, &urlEditorField, &responseBodyEditor)
 
 		// w.Row(30).Dynamic(1)
 		w.Row(30).Dynamic(3)
 		// w.Row(30).Static(180)
 		w.LabelColored(httpMethod, "LT", colornames.Aquamarine)
-		textEditorEditor.Edit(w)
+
+		urlEditorField.Edit(w)
 
 		var pressed = w.Button(label.T("send"), false)
 
+		if (httpMethod == "PUT" || httpMethod == "POST") {
+			w.Row(100).Dynamic(1)
+
+			requestBodyEditorField.Edit(w)
+		}
+
 		w.Row(30).Dynamic(1)
-		w.Label(strconv.Itoa(status), "RT")
+		w.LabelColored(responseContentType, "LT", colornames.Aquamarine)
+		w.LabelColored(strconv.Itoa(status), "RT", colornames.Aquamarine)
 
 		w.Row(500).Dynamic(1)
 		responseBodyEditor.Maxlen = 1000
 		responseBodyEditor.Edit(w)
 
 		if pressed {
-			fmt.Printf("my press %s\n", string(textEditorEditor.Buffer))
+			fmt.Printf("my press %s\n", string(urlEditorField.Buffer))
 
-			var body, httpStatus = callHttp(string(textEditorEditor.Buffer), httpMethod)
-			status = httpStatus
+			var response = callHttp(string(urlEditorField.Buffer), httpMethod)
+			status = response.status
 
-			responseBodyEditor.Buffer = []rune(body)
+			responseBodyEditor.Buffer = []rune(response.body)
+			responseContentType = response.contentType
 		}
 	}
+}
+
+func cycleSelectedInputFieldForward() {
+
+	var foldOver = len(tabbableFields) - 1
+
+	// Find the active and set the next element to active
+	for e := range tabbableFields {
+		element := tabbableFields[e]
+
+		if (element.Active == true) {
+
+			if (e+1 > foldOver) {
+				tabbableFields[0].Active = true
+				element.Active = false
+			} else {
+				tabbableFields[e+1].Active = true
+				element.Active = false
+			}
+
+			break
+		}
+	}
+
+}
+
+func cycleSelectedInputFieldBackward() {
+	
+
+	// Find the active and set the previous element to active
+	var foldOver = len(tabbableFields) - 1
+
+	// Find the active and set the next element to active
+	for e := range tabbableFields {
+		element := tabbableFields[e]
+
+		if (element.Active == true) {
+
+			if (e-1 < 0) {
+				tabbableFields[foldOver].Active = true
+				element.Active = false
+			} else {
+				tabbableFields[e-1].Active = true
+				element.Active = false
+			}
+
+			break
+		}
+	}
+
 }
 
 func keybindings(w *nucular.Window, urlField *nucular.TextEditor, responseField *nucular.TextEditor) {
@@ -121,15 +181,25 @@ func keybindings(w *nucular.Window, urlField *nucular.TextEditor, responseField 
 
 			case (e.Modifiers == key.ModControl && (e.Code == key.CodeReturnEnter)):
 
-				var body, httpStatus = callHttp(string(urlField.Buffer), httpMethod)
+				var response = callHttp(string(urlField.Buffer), httpMethod)
 
-				var clean = removeCRs(body)
+				var clean = removeCRs(response.body)
 
 				responseField.Buffer = []rune(clean)
 
-				status = httpStatus
+				status = response.status
+				responseContentType = response.contentType
+
+			case (e.Modifiers == key.ModShift && (e.Code == key.CodeTab)):
+				cycleSelectedInputFieldBackward()
+
+			case (e.Code == key.CodeTab):
+				cycleSelectedInputFieldForward()
+
+
 
 			}
+
 		}
 	}
 }
@@ -154,54 +224,43 @@ func basicAuth(username string, password string) string {
 	return base64.StdEncoding.EncodeToString([]byte(auth))
 }
 
-func callHttp(s string, method string) (string, int) {
+type HttpResponse struct {
+	status int
+	body string
+	contentType string
+	contentLength string
+}
 
-	fmt.Println("called")
+func callHttp(s string, method string) HttpResponse {
+
+	fmt.Println("callHttp called")
 	req, err := http.NewRequest(method, s, nil)
 	req.Header.Add("Authorization", "Basic "+basicAuth(auth.a, auth.b))
 
 	resp, err := client.Do(req)
 
 	if err != nil {
-		return "error", 418
+		return HttpResponse{
+			500,
+			"",
+			"error",
+			"0",
+		}
 	}
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	return string(body), resp.StatusCode
-
-}
-
-func basicDemo(w *nucular.Window) {
-
-	w.Row(30).Dynamic(1)
-	w.Label(time.Now().Format("15:04:05"), "RT")
-
-	w.Label("My gawd", "LT")
-
-	var textEditorEditor nucular.TextEditor
-
-	textEditorEditor.Flags = nucular.EditSelectable
-
-	textEditorEditor.Buffer = []rune("prova")
-
-	w.Row(30).Dynamic(1)
-	textEditorEditor.Maxlen = 30
-	textEditorEditor.Edit(w)
-
-	w.Row(30).Static(80)
-	if w.Button(label.T("button"), false) {
-		fmt.Printf("button pressed! difficulty: %v compression: %d\n", op, compression)
+	for k, v := range resp.Header {
+		fmt.Printf("key[%s] value[%s]\n", k, v)
 	}
-	w.Row(30).Dynamic(2)
-	if w.OptionText("easy", op == easy) {
-		op = easy
+
+	return HttpResponse{
+		status: resp.StatusCode,
+		body: string(body),
+		contentType: resp.Header.Get("Content-Type"),
+		contentLength: resp.Header.Get("Content-Length"),
 	}
-	if w.OptionText("hard", op == hard) {
-		op = hard
-	}
-	w.Row(25).Dynamic(1)
-	w.PropertyInt("Compression:", 0, &compression, 100, 10, 1)
+
 }
