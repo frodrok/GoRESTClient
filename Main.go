@@ -1,24 +1,31 @@
 package main
 
 import (
-	"encoding/base64"
+	"GoRESTClient/configHandler"
+	"encoding/json"
 	"fmt"
 	"github.com/aarzilli/nucular"
-	"github.com/aarzilli/nucular/label"
+	"github.com/go-xmlfmt/xmlfmt"
+	"github.com/yosssi/gohtml"
 	"golang.org/x/image/colornames"
 	"golang.org/x/mobile/event/key"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
-	"strconv"
+	"strings"
+	"time"
 )
+
+func LOG(s string) {
+	fmt.Printf("%s - %s\n", time.Now().Format("2009-09-01T15:04"), s)
+}
 
 var Wnd nucular.MasterWindow
 
 var Title = "Gostman"
 
 func main() {
-	fmt.Println("hello sir\n");
+
 	Wnd = nucular.NewMasterWindow(0, Title, textEditorDemo())
 
 	if Wnd == nil {
@@ -30,54 +37,82 @@ func main() {
 	Wnd.Main()
 }
 
-var status = 0
-var responseContentType string
-var tabbableFields [3]*nucular.TextEditor
+var status = "django bango"
+var responseContentType string = "ttt"
+var tabbableFields [5]*nucular.TextEditor
 
 type Pair struct {
 	a, b string
 }
 
+// Load these default values from config file
 var auth = Pair{"admin", "admin"}
 
 var client = &http.Client{}
 var httpMethod = "GET"
+var HistoryStruct, _ = configHandler.GetHistoryOrCreateHistoryFile()
 
+var history = HistoryStruct.Content
+
+// Construct the render function
 func textEditorDemo() func(w *nucular.Window) {
 
 	var urlEditorField nucular.TextEditor
-	urlEditorField.Flags = nucular.EditSelectable
-	urlEditorField.Buffer = []rune("https://google.se/API/version")
+	urlEditorField.Flags = nucular.EditSelectable | nucular.EditClipboard
+
+	// Set the buffer to the last value in the history or else empty
+	urlEditorField.Buffer = []rune(history[len(history) -1])
 	urlEditorField.Maxlen = 1000
 	urlEditorField.Active = true
+
 	tabbableFields[0] = &urlEditorField
 
 	var requestBodyEditorField nucular.TextEditor
-	requestBodyEditorField.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditClipboard | nucular.EditIbeamCursor
+	// What determines if the field gets auto tabbed? Is it EditMultiline?
+	requestBodyEditorField.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditClipboard
 	requestBodyEditorField.Buffer = []rune("request body")
 	requestBodyEditorField.Maxlen = 150
-	tabbableFields[1] = &requestBodyEditorField
 
+	tabbableFields[3] = &requestBodyEditorField
+
+	var usernameEditorField nucular.TextEditor
+	usernameEditorField.Flags = nucular.EditSelectable | nucular.EditClipboard
+	usernameEditorField.Buffer = []rune(auth.a)
+	usernameEditorField.Maxlen = 150
+
+	tabbableFields[1] = &usernameEditorField
+
+	var passwordEditorField nucular.TextEditor
+	passwordEditorField.Flags = nucular.EditSelectable | nucular.EditClipboard
+	passwordEditorField.Buffer = []rune(auth.b)
+	passwordEditorField.Maxlen = 150
+
+	tabbableFields[2] = &passwordEditorField
 
 	var responseBodyEditor nucular.TextEditor
-	responseBodyEditor.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditClipboard | nucular.EditIbeamCursor
-
+	responseBodyEditor.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditClipboard | nucular.EditReadOnly
 	responseBodyEditor.Buffer = []rune("response body")
 
-	tabbableFields[2] = &responseBodyEditor
+	tabbableFields[4] = &responseBodyEditor
+
+	var history, _ = configHandler.GetHistoryOrCreateHistoryFile()
+
+	fmt.Println("main history", history)
 
 	return func(w *nucular.Window) {
 
-		keybindings(w, &urlEditorField, &responseBodyEditor)
+		handleKeybindings(w, &urlEditorField, &responseBodyEditor,
+			&usernameEditorField, &passwordEditorField, &requestBodyEditorField)
 
-		// w.Row(30).Dynamic(1)
-		w.Row(30).Dynamic(3)
-		// w.Row(30).Static(180)
+
+		w.Row(30).Static(50, 500, 125, 125)
+
 		w.LabelColored(httpMethod, "LT", colornames.Aquamarine)
 
 		urlEditorField.Edit(w)
 
-		var pressed = w.Button(label.T("send"), false)
+		usernameEditorField.Edit(w)
+		passwordEditorField.Edit(w)
 
 		if (httpMethod == "PUT" || httpMethod == "POST") {
 			w.Row(100).Dynamic(1)
@@ -85,23 +120,19 @@ func textEditorDemo() func(w *nucular.Window) {
 			requestBodyEditorField.Edit(w)
 		}
 
-		w.Row(30).Dynamic(1)
-		w.LabelColored(responseContentType, "LT", colornames.Aquamarine)
-		w.LabelColored(strconv.Itoa(status), "RT", colornames.Aquamarine)
+		w.Row(30).Dynamic(4)
 
-		w.Row(500).Dynamic(1)
-		responseBodyEditor.Maxlen = 1000
+		w.LabelWrap("Wut")
+		w.LabelWrap("Wut2")
+		w.LabelColored(status, "RT", colornames.Aquamarine)
+		w.LabelColored(responseContentType, "RT", colornames.Aquamarine)
+
+		//w.Row(500).Dynamic(1)
+		w.RowScaled(500).Dynamic(1)
+
+		responseBodyEditor.Maxlen = 100000
 		responseBodyEditor.Edit(w)
 
-		if pressed {
-			fmt.Printf("my press %s\n", string(urlEditorField.Buffer))
-
-			var response = callHttp(string(urlEditorField.Buffer), httpMethod)
-			status = response.status
-
-			responseBodyEditor.Buffer = []rune(response.body)
-			responseContentType = response.contentType
-		}
 	}
 }
 
@@ -130,7 +161,6 @@ func cycleSelectedInputFieldForward() {
 }
 
 func cycleSelectedInputFieldBackward() {
-	
 
 	// Find the active and set the previous element to active
 	var foldOver = len(tabbableFields) - 1
@@ -155,8 +185,14 @@ func cycleSelectedInputFieldBackward() {
 
 }
 
-func keybindings(w *nucular.Window, urlField *nucular.TextEditor, responseField *nucular.TextEditor) {
+func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
+	responseField *nucular.TextEditor,
+	usernameField *nucular.TextEditor,
+	passwordField *nucular.TextEditor,
+	requestBodyField *nucular.TextEditor) {
+
 	mw := w.Master()
+
 	if in := w.Input(); in != nil {
 		k := in.Keyboard
 		for _, e := range k.Keys {
@@ -170,6 +206,7 @@ func keybindings(w *nucular.Window, urlField *nucular.TextEditor, responseField 
 			case (e.Modifiers == key.ModControl) && (e.Code == key.CodeF):
 				mw.SetPerf(!mw.GetPerf())
 
+				// Change request method binds
 			case (e.Modifiers == key.ModControl && (e.Code == key.CodeQ)):
 				httpMethod = "GET"
 			case (e.Modifiers == key.ModControl && (e.Code == key.CodeW)):
@@ -179,15 +216,47 @@ func keybindings(w *nucular.Window, urlField *nucular.TextEditor, responseField 
 			case (e.Modifiers == key.ModControl && (e.Code == key.CodeR)):
 				httpMethod = "DELETE"
 
+				// Send HTTP request binds
 			case (e.Modifiers == key.ModControl && (e.Code == key.CodeReturnEnter)):
 
-				var response = callHttp(string(urlField.Buffer), httpMethod)
+				var request HttpRequest
 
+				// Don't send a body in GET or DELETE requests
+				if (httpMethod == "GET" || httpMethod == "DELETE") {
+
+					request = HttpRequest{
+						httpMethod,
+						string(urlField.Buffer),
+						string(usernameField.Buffer),
+						string(passwordField.Buffer),
+						"",
+					}
+
+				} else {
+					request = HttpRequest{
+						httpMethod,
+						string(urlField.Buffer),
+						string(usernameField.Buffer),
+						string(passwordField.Buffer),
+						string(requestBodyField.Buffer),
+					}
+				}
+
+				var response = CallHttp(&request)
+
+				// Check if we find any rune's with code 13 and clean the body if so :lenn:
 				var clean = removeCRs(response.body)
 
-				responseField.Buffer = []rune(clean)
+				println(response.contentLength)
+				println([]rune(clean))
 
-				status = response.status
+				formattedBody := formatBody(clean, response.contentType)
+				// Format some html
+				//formatted := gohtml.Format(clean)
+
+				responseField.Buffer = []rune(formattedBody)
+
+				status = response.statusString
 				responseContentType = response.contentType
 
 			case (e.Modifiers == key.ModShift && (e.Code == key.CodeTab)):
@@ -197,14 +266,41 @@ func keybindings(w *nucular.Window, urlField *nucular.TextEditor, responseField 
 				cycleSelectedInputFieldForward()
 
 
-
 			}
 
 		}
 	}
 }
 
+func formatBody(body string, contentType string) string {
+	isHtml := strings.Index(contentType, "html") > -1
+	isXml := strings.Index(contentType, "xml") > -1
+	isJson := strings.Index(contentType, "json") > -1
+
+	if (isHtml) {
+		return gohtml.Format(body)
+	}
+
+	if (isXml) {
+		return xmlfmt.FormatXML(body, "", "  ")
+	}
+
+	if (isJson) {
+		var out io.Writer
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(body); err != nil {
+			return body
+		}
+		return body
+	}
+
+	return body
+
+}
+
 func removeCRs(s string) string {
+	/* Removes carriage return char's from a string */
 	var asRune []rune = nil
 
 	for _, char := range s {
@@ -216,51 +312,5 @@ func removeCRs(s string) string {
 	}
 
 	return string(asRune)
-
-}
-
-func basicAuth(username string, password string) string {
-	var auth = username + ":" + password
-	return base64.StdEncoding.EncodeToString([]byte(auth))
-}
-
-type HttpResponse struct {
-	status int
-	body string
-	contentType string
-	contentLength string
-}
-
-func callHttp(s string, method string) HttpResponse {
-
-	fmt.Println("callHttp called")
-	req, err := http.NewRequest(method, s, nil)
-	req.Header.Add("Authorization", "Basic "+basicAuth(auth.a, auth.b))
-
-	resp, err := client.Do(req)
-
-	if err != nil {
-		return HttpResponse{
-			500,
-			"",
-			"error",
-			"0",
-		}
-	}
-
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-
-	for k, v := range resp.Header {
-		fmt.Printf("key[%s] value[%s]\n", k, v)
-	}
-
-	return HttpResponse{
-		status: resp.StatusCode,
-		body: string(body),
-		contentType: resp.Header.Get("Content-Type"),
-		contentLength: resp.Header.Get("Content-Length"),
-	}
 
 }
