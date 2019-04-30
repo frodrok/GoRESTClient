@@ -75,6 +75,8 @@ func SaveConfig(conf *Configuration) bool {
 
 func GetHistoryOrCreateHistoryFile() (*History, error) {
 
+	/* Load history from file or return an empty history struct and err */
+
 	var hist = History{}
 
 	// Check if the folder exists
@@ -114,7 +116,6 @@ func GetHistoryOrCreateHistoryFile() (*History, error) {
 
 		return &hist, nil
 	}
-
 
 	return &hist, nil
 }

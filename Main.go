@@ -95,9 +95,21 @@ func textEditorDemo() func(w *nucular.Window) {
 
 	tabbableFields[4] = &responseBodyEditor
 
-	var history, _ = configHandler.GetHistoryOrCreateHistoryFile()
+	history, err := configHandler.GetHistoryOrCreateHistoryFile()
 
-	fmt.Println("main history", history)
+	if err != nil {
+		println("could not load history")
+	}
+
+	fmt.Println("main history", history.Content)
+
+	config, err := configHandler.LoadConfig()
+
+	if err != nil {
+		println("could not load config")
+	}
+
+	fmt.Println("config", config)
 
 	return func(w *nucular.Window) {
 
