@@ -29,7 +29,7 @@ func LoadConfig() (*Configuration, error) {
 	raw_bytes, err := ioutil.ReadFile(CONFIG_PATH)
 
 	if err != nil {
-		panic(err)
+		// panic(err)
 		return nil, err
 	}
 

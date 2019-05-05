@@ -23,6 +23,7 @@ type HttpRequest struct {
 	username string
 	password string
 	body string
+	headers map[string]string
 }
 
 func basicAuth(username string, password string) string {
@@ -40,12 +41,18 @@ func CallHttp(req *HttpRequest) HttpResponse {
 
 	var newRequest, err = http.NewRequest(req.method, req.url, bodyBuffer)
 
+	if req.headers != nil {
+		for key, value := range req.headers {
+			newRequest.Header.Add(key, value)
+		}
+	}
+
 	if err != nil {
 
 		return HttpResponse{
 			500,
-			"",
-			"error",
+			"err",
+			err.Error(),
 			"0",
 			"0",
 		}
@@ -61,7 +68,7 @@ func CallHttp(req *HttpRequest) HttpResponse {
 		return HttpResponse{
 			500,
 			"",
-			"error",
+			err.Error(),
 			"0",
 			"0",
 		}

@@ -9,6 +9,7 @@ import (
 	"github.com/yosssi/gohtml"
 	"golang.org/x/image/colornames"
 	"golang.org/x/mobile/event/key"
+	"image"
 	"io"
 	"net/http"
 	"os"
@@ -26,7 +27,7 @@ var Title = "Gostman"
 
 func main() {
 
-	Wnd = nucular.NewMasterWindow(0, Title, textEditorDemo())
+	Wnd = nucular.NewMasterWindowSize(0, Title, image.Point{1000,1000}, textEditorDemo())
 
 	if Wnd == nil {
 		_, _ = fmt.Fprintf(os.Stderr, "unknown demo %q\n", "WUT")
@@ -39,7 +40,7 @@ func main() {
 
 var status = "django bango"
 var responseContentType string = "ttt"
-var tabbableFields [5]*nucular.TextEditor
+var tabbableFields []*nucular.TextEditor
 
 type Pair struct {
 	a, b string
@@ -54,6 +55,29 @@ var HistoryStruct, _ = configHandler.GetHistoryOrCreateHistoryFile()
 
 var history = HistoryStruct.Content
 
+var splith = &nucular.ScalableSplit{}
+
+type HttpHeaderDisplay struct {
+	enabled bool
+	name string
+	value string
+}
+
+var displayHeadersList = []*HttpHeaderDisplay{}
+
+var wutface = HttpHeaderDisplay{
+	true,
+	"Content-Type",
+	"application/json",
+}
+
+var wutface2 = HttpHeaderDisplay{
+	false,
+	"Accept",
+	"application/smason",
+}
+
+
 // Construct the render function
 func textEditorDemo() func(w *nucular.Window) {
 
@@ -65,7 +89,7 @@ func textEditorDemo() func(w *nucular.Window) {
 	urlEditorField.Maxlen = 1000
 	urlEditorField.Active = true
 
-	tabbableFields[0] = &urlEditorField
+	tabbableFields = append(tabbableFields, &urlEditorField)
 
 	var requestBodyEditorField nucular.TextEditor
 	// What determines if the field gets auto tabbed? Is it EditMultiline?
@@ -73,27 +97,31 @@ func textEditorDemo() func(w *nucular.Window) {
 	requestBodyEditorField.Buffer = []rune("request body")
 	requestBodyEditorField.Maxlen = 150
 
-	tabbableFields[3] = &requestBodyEditorField
+	tabbableFields = append(tabbableFields, &requestBodyEditorField)
 
 	var usernameEditorField nucular.TextEditor
 	usernameEditorField.Flags = nucular.EditSelectable | nucular.EditClipboard
 	usernameEditorField.Buffer = []rune(auth.a)
 	usernameEditorField.Maxlen = 150
 
-	tabbableFields[1] = &usernameEditorField
+	tabbableFields = append(tabbableFields, &usernameEditorField)
 
 	var passwordEditorField nucular.TextEditor
 	passwordEditorField.Flags = nucular.EditSelectable | nucular.EditClipboard
 	passwordEditorField.Buffer = []rune(auth.b)
 	passwordEditorField.Maxlen = 150
 
-	tabbableFields[2] = &passwordEditorField
+	tabbableFields = append(tabbableFields, &passwordEditorField)
 
 	var responseBodyEditor nucular.TextEditor
 	responseBodyEditor.Flags = nucular.EditSelectable | nucular.EditMultiline | nucular.EditClipboard | nucular.EditReadOnly
 	responseBodyEditor.Buffer = []rune("response body")
 
-	tabbableFields[4] = &responseBodyEditor
+	tabbableFields = append(tabbableFields, &responseBodyEditor)
+
+	splith.MinSize = 80
+	splith.Size = 120
+	splith.Spacing = 5
 
 	history, err := configHandler.GetHistoryOrCreateHistoryFile()
 
@@ -111,10 +139,26 @@ func textEditorDemo() func(w *nucular.Window) {
 
 	fmt.Println("config", config)
 
+	displayHeadersList = append(displayHeadersList, &wutface)
+	displayHeadersList = append(displayHeadersList, &wutface2)
+
+	var displayHeadersInputsList []*nucular.TextEditor
+
+	for _, el := range displayHeadersList {
+		var textEditor = nucular.TextEditor{}
+		textEditor.Buffer = []rune(el.value)
+		textEditor.Flags = nucular.EditSelectable | nucular.EditClipboard
+		displayHeadersInputsList = append(displayHeadersInputsList, &textEditor)
+		tabbableFields = append(tabbableFields, &textEditor)
+
+	}
+
+	// This is the render function, everything above it is called once upon initialization
 	return func(w *nucular.Window) {
 
 		handleKeybindings(w, &urlEditorField, &responseBodyEditor,
-			&usernameEditorField, &passwordEditorField, &requestBodyEditorField)
+			&usernameEditorField, &passwordEditorField, &requestBodyEditorField, &displayHeadersList)
+
 
 
 		w.Row(30).Static(50, 500, 125, 125)
@@ -122,6 +166,8 @@ func textEditorDemo() func(w *nucular.Window) {
 		w.LabelColored(httpMethod, "LT", colornames.Aquamarine)
 
 		urlEditorField.Edit(w)
+
+
 
 		usernameEditorField.Edit(w)
 		passwordEditorField.Edit(w)
@@ -131,6 +177,8 @@ func textEditorDemo() func(w *nucular.Window) {
 
 			requestBodyEditorField.Edit(w)
 		}
+
+		renderRequestHeaders(w, &displayHeadersList, &displayHeadersInputsList)
 
 		w.Row(30).Dynamic(4)
 
@@ -145,12 +193,39 @@ func textEditorDemo() func(w *nucular.Window) {
 		responseBodyEditor.Maxlen = 100000
 		responseBodyEditor.Edit(w)
 
+		area := w.Row(0).SpaceBegin(0)
+
+		//viewbounds, commitbounds := splith.Horizontal(w, rect.Rect{0, 0, 150, 150})
+		viewbounds, commitbounds := splith.Horizontal(w, area)
+
+		w.LayoutSpacePushScaled(viewbounds)
+		w.LabelColored("my face is yours", "LT", colornames.Blueviolet)
+		w.LayoutSpacePushScaled(commitbounds)
+		w.LabelColored("my face is yours", "LT", colornames.Blueviolet)
+
+
+	}
+}
+
+func renderRequestHeaders(w *nucular.Window,
+	displayHeadersList *[]*HttpHeaderDisplay,
+	displayHeadersInputList *[]*nucular.TextEditor) {
+	w.Row(50).Dynamic(2)
+
+	displayHeaderStructs := *displayHeadersList
+	displayHeaderInputs := *displayHeadersInputList
+
+	for index, headerDisplay := range displayHeaderStructs {
+		w.CheckboxText(headerDisplay.name, &headerDisplay.enabled)
+		displayHeaderInputs[index].Edit(w)
 	}
 }
 
 func cycleSelectedInputFieldForward() {
 
 	var foldOver = len(tabbableFields) - 1
+
+
 
 	// Find the active and set the next element to active
 	for e := range tabbableFields {
@@ -201,7 +276,8 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 	responseField *nucular.TextEditor,
 	usernameField *nucular.TextEditor,
 	passwordField *nucular.TextEditor,
-	requestBodyField *nucular.TextEditor) {
+	requestBodyField *nucular.TextEditor,
+	displayHeadersList *[]*HttpHeaderDisplay) {
 
 	mw := w.Master()
 
@@ -233,6 +309,8 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 
 				var request HttpRequest
 
+				requestHeaders := createHeadersFromSelected(displayHeadersList)
+
 				// Don't send a body in GET or DELETE requests
 				if (httpMethod == "GET" || httpMethod == "DELETE") {
 
@@ -242,6 +320,7 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 						string(usernameField.Buffer),
 						string(passwordField.Buffer),
 						"",
+						requestHeaders,
 					}
 
 				} else {
@@ -251,6 +330,7 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 						string(usernameField.Buffer),
 						string(passwordField.Buffer),
 						string(requestBodyField.Buffer),
+						requestHeaders,
 					}
 				}
 
@@ -282,6 +362,23 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 
 		}
 	}
+}
+
+func createHeadersFromSelected(display *[]*HttpHeaderDisplay) map[string]string {
+	hest := *display
+
+	var mapperino = make(map[string]string)
+
+	for _, el := range hest {
+
+		// For some reason the active/enabled value of nucular.CheckboxText is inverted,
+		// I'm not interested in why so just feeelip it
+		if !el.enabled {
+			mapperino[el.name] = el.value
+		}
+	}
+
+	return mapperino
 }
 
 func formatBody(body string, contentType string) string {
