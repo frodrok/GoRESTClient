@@ -1,0 +1,2 @@
+# wanted gostman features
+while editing the url ctrl+w selects the value between the slashes
