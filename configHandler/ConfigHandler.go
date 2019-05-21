@@ -123,7 +123,7 @@ func GetHistoryOrCreateHistoryFile() (*History, error) {
 
 func SaveToHistory(url string) bool {
 
-	// hist is pointer to a History struct
+	// hist is a pointer to a History struct
 	var hist, err = GetHistoryOrCreateHistoryFile()
 
 	if err != nil {

@@ -166,9 +166,6 @@ func textEditorDemo() func(w *nucular.Window) {
 		w.LabelColored(httpMethod, "LT", colornames.Aquamarine)
 
 		urlEditorField.Edit(w)
-
-
-
 		usernameEditorField.Edit(w)
 		passwordEditorField.Edit(w)
 
@@ -225,13 +222,15 @@ func cycleSelectedInputFieldForward() {
 
 	var foldOver = len(tabbableFields) - 1
 
-
-
 	// Find the active and set the next element to active
 	for e := range tabbableFields {
 		element := tabbableFields[e]
 
+
+
 		if (element.Active == true) {
+
+
 
 			if (e+1 > foldOver) {
 				tabbableFields[0].Active = true
@@ -367,21 +366,22 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 func createHeadersFromSelected(display *[]*HttpHeaderDisplay) map[string]string {
 	hest := *display
 
-	var mapperino = make(map[string]string)
+	var resultingRequestHeaders = make(map[string]string)
 
 	for _, el := range hest {
 
-		// For some reason the active/enabled value of nucular.CheckboxText is inverted,
-		// I'm not interested in why so just feeelip it
+		// For some reason the active/enabled value of nucular.CheckboxText is inverted
+		// Flip it
 		if !el.enabled {
-			mapperino[el.name] = el.value
+			resultingRequestHeaders[el.name] = el.value
 		}
 	}
 
-	return mapperino
+	return resultingRequestHeaders
 }
 
 func formatBody(body string, contentType string) string {
+
 	isHtml := strings.Index(contentType, "html") > -1
 	isXml := strings.Index(contentType, "xml") > -1
 	isJson := strings.Index(contentType, "json") > -1

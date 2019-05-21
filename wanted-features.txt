@@ -1,0 +1,7 @@
+Ctrl+W selects a word in editors
+Request headers are saved with the request history
+Be able to add and remove headers
+Be able to use variables and environment variables
+Response body fills up the whole editor
+Be able to set custom keybindings
+Use channels to make http call and call back with the result
