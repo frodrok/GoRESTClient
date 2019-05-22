@@ -1,2 +1,2 @@
 * Cannot tab in the request body editor
-
+* URL field does not honor caps lock

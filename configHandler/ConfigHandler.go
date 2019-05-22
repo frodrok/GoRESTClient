@@ -1,6 +1,7 @@
 package configHandler
 
 import (
+	b64 "encoding/base64"
 	"encoding/json"
 	"io/ioutil"
 	"os"
@@ -8,7 +9,7 @@ import (
 )
 
 type Environment struct {
-	name string
+	name      string
 	variables map[string]string
 }
 
@@ -16,8 +17,16 @@ type Configuration struct {
 	environments []Environment
 }
 
+var BASE64_SPLIT_PATTERN = "~_~"
+
+type HistoryEntry struct {
+	Url      string
+	Username string
+	Password string
+}
+
 type History struct {
-	Content []string
+	Content []HistoryEntry
 }
 
 var HOME_PATH = os.Getenv("HOME")
@@ -54,7 +63,7 @@ func SaveConfig(conf *Configuration) bool {
 	// Check if the folder exists
 	if _, err := os.Stat(HOME_PATH + "/.gostman"); os.IsNotExist(err) {
 
-		err := os.Mkdir(HOME_PATH + "/.gostman", 0755)
+		err := os.Mkdir(HOME_PATH+"/.gostman", 0755)
 
 		if err != nil {
 			panic(err)
@@ -82,7 +91,7 @@ func GetHistoryOrCreateHistoryFile() (*History, error) {
 	// Check if the folder exists
 	if _, err := os.Stat(HOME_PATH + "/.gostman"); os.IsNotExist(err) {
 
-		err := os.Mkdir(HOME_PATH + "/.gostman", 0755)
+		err := os.Mkdir(HOME_PATH+"/.gostman", 0755)
 
 		if err != nil {
 			panic(err)
@@ -92,7 +101,7 @@ func GetHistoryOrCreateHistoryFile() (*History, error) {
 
 	// If the history file doesn't exist, create it and return an empty history
 	if _, err := os.Stat(HOME_PATH + "/.gostman/history"); os.IsNotExist(err) {
-		err := ioutil.WriteFile(HOME_PATH + "/.gostman/history", []byte(nil), 0644)
+		err := ioutil.WriteFile(HOME_PATH+"/.gostman/history", []byte(nil), 0644)
 
 		if err != nil {
 			panic(err)
@@ -102,7 +111,7 @@ func GetHistoryOrCreateHistoryFile() (*History, error) {
 
 	} else {
 
-		// If it exists unmarshal the json and return it
+		// If it exists unmarshal the content and return it
 		byhtes, err := ioutil.ReadFile(HOME_PATH + "/.gostman/history")
 
 		if err != nil {
@@ -110,9 +119,32 @@ func GetHistoryOrCreateHistoryFile() (*History, error) {
 		}
 
 		str := string(byhtes)
-		var ff = strings.Split(str, "\n")
 
-		hist.Content = ff
+		println(len(str))
+
+		if len(str) < 1 {
+			return &hist, nil
+		}
+		var historyFileRows = strings.Split(str, "\n")
+
+		println("lenrows")
+		println(len(historyFileRows))
+
+		for _, entry := range historyFileRows {
+			// Base64 decode and add to hist.Content
+			raw, err := b64.StdEncoding.DecodeString(entry)
+
+			if err != nil {
+				continue
+			}
+
+			var histEntry = stringToHistoryEntry(string(raw))
+
+			hist.Content = append(hist.Content, histEntry)
+
+		}
+
+		//hist.Content = ff
 
 		return &hist, nil
 	}
@@ -120,8 +152,33 @@ func GetHistoryOrCreateHistoryFile() (*History, error) {
 	return &hist, nil
 }
 
+func historyEntryToString(hist HistoryEntry) string {
 
-func SaveToHistory(url string) bool {
+	// Base 64 encode url:username:password and store that
+	toEncode := hist.Url + BASE64_SPLIT_PATTERN + hist.Username + BASE64_SPLIT_PATTERN + hist.Password
+	encoded := b64.StdEncoding.EncodeToString([]byte(toEncode))
+	return encoded
+}
+
+func stringToHistoryEntry(s string) HistoryEntry {
+
+	histEntry := &HistoryEntry{}
+
+	println("received string:")
+	println(s)
+
+	splat := strings.Split(s, BASE64_SPLIT_PATTERN)
+
+	histEntry.Url = splat[0]
+	histEntry.Username = splat[1]
+	histEntry.Password = splat[2]
+
+	return *histEntry
+}
+
+func SaveToHistory(url string,
+	username string,
+	password string) bool {
 
 	// hist is a pointer to a History struct
 	var hist, err = GetHistoryOrCreateHistoryFile()
@@ -130,11 +187,24 @@ func SaveToHistory(url string) bool {
 		panic(err)
 	}
 
-	hist.Content = append(hist.Content, url)
+	entry := &HistoryEntry{
+		url,
+		username,
+		password,
+	}
 
-	asString := strings.Join(hist.Content, "\n")
+	hist.Content = append(hist.Content, *entry)
 
-	if err := ioutil.WriteFile(HOME_PATH + "/.gostman/history", []byte(asString), 0644); err != nil {
+	var asStrings []string
+
+	for _, content := range hist.Content {
+		asString := historyEntryToString(content)
+		asStrings = append(asStrings, asString)
+	}
+
+	asFinalString := strings.Join(asStrings, "\n")
+
+	if err := ioutil.WriteFile(HOME_PATH+"/.gostman/history", []byte(asFinalString), 0644); err != nil {
 		panic(err)
 		return false
 	}

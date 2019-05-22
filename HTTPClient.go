@@ -6,24 +6,24 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
+	//	"strconv"
 )
 
 type HttpResponse struct {
-	status int
-	statusString string
-	body string
-	contentType string
+	status        int
+	statusString  string
+	body          string
+	contentType   string
 	contentLength string
 }
 
 type HttpRequest struct {
-	method string
-	url string
+	method   string
+	url      string
 	username string
 	password string
-	body string
-	headers map[string]string
+	body     string
+	headers  map[string]string
 }
 
 func basicAuth(username string, password string) string {
@@ -59,7 +59,7 @@ func CallHttp(req *HttpRequest) HttpResponse {
 
 	}
 
-	newRequest.Header.Add("Authorization", "Basic " + basicAuth(req.username, req.password))
+	newRequest.Header.Add("Authorization", "Basic "+basicAuth(req.username, req.password))
 
 	resp, err := client.Do(newRequest)
 
@@ -79,21 +79,20 @@ func CallHttp(req *HttpRequest) HttpResponse {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	LOG(string(body))
-	LOG(strconv.Itoa(resp.StatusCode))
+	//LOG(string(body))
+	//LOG(strconv.Itoa(resp.StatusCode))
 
 	return HttpResponse{
-		status: resp.StatusCode,
-		statusString: resp.Status,
-		body: string(body),
-		contentType: resp.Header.Get("Content-Type"),
+		status:        resp.StatusCode,
+		statusString:  resp.Status,
+		body:          string(body),
+		contentType:   resp.Header.Get("Content-Type"),
 		contentLength: resp.Header.Get("Content-Length"),
 	}
 }
 
 func CallHttpSimple(method string, url string) HttpResponse {
 
-	fmt.Println("callHttpSimple called")
 	req, err := http.NewRequest(method, url, nil)
 
 	if err != nil {
@@ -129,9 +128,9 @@ func CallHttpSimple(method string, url string) HttpResponse {
 	}
 
 	return HttpResponse{
-		status: resp.StatusCode,
-		body: string(body),
-		contentType: resp.Header.Get("Content-Type"),
+		status:        resp.StatusCode,
+		body:          string(body),
+		contentType:   resp.Header.Get("Content-Type"),
 		contentLength: resp.Header.Get("Content-Length"),
 	}
 

@@ -2,6 +2,9 @@ Ctrl+W selects a word in editors
 Request headers are saved with the request history
 Be able to add and remove headers
 Be able to use variables and environment variables
-Response body fills up the whole editor
+Response body fills up the whole editor (implemented)
 Be able to set custom keybindings
 Use channels to make http call and call back with the result
+Syntax highlighting in the request and response editors
+Auto fill URL field based on previous requests
+Save and restore credentials with request history (implemented)
