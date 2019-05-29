@@ -413,14 +413,19 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 					}
 				}
 
-				var response = CallHttp(&request)
+				responses := make(chan HttpResponse)
+
+				go func() {
+					var response = CallHttp(&request)
+					responses <- response
+				}()
+
+				response := <-responses
 
 				// Check if we find any rune's with code 13 and clean the body if so :lenn:
 				var clean = removeCRs(response.body)
 
 				formattedBody := formatBody(clean, response.contentType)
-				// Format some html
-				//formatted := gohtml.Format(clean)
 
 				responseField.Buffer = []rune(formattedBody)
 
