@@ -41,12 +41,12 @@ func main() {
 	Wnd.Main()
 }
 
-var status = "django bango"
-var responseContentType string = "ttt"
+var status = "http status"
+var responseContentType string = "content type"
 var tabbableFields []*nucular.TextEditor
 
 type Pair struct {
-	a, b string
+	a, b interface{}
 }
 
 // Load these default values from config file
@@ -101,14 +101,14 @@ func textEditorDemo() func(w *nucular.Window) {
 
 	var usernameEditorField nucular.TextEditor
 	usernameEditorField.Flags = nucular.EditSelectable | nucular.EditClipboard
-	usernameEditorField.Buffer = []rune(auth.a)
+	usernameEditorField.Buffer = []rune(auth.a.(string))
 	usernameEditorField.Maxlen = 150
 
 	tabbableFields = append(tabbableFields, &usernameEditorField)
 
 	var passwordEditorField nucular.TextEditor
 	passwordEditorField.Flags = nucular.EditSelectable | nucular.EditClipboard
-	passwordEditorField.Buffer = []rune(auth.b)
+	passwordEditorField.Buffer = []rune(auth.b.(string))
 	passwordEditorField.Maxlen = 150
 
 	// Set the buffer to the last value in the history or else empty
@@ -288,6 +288,66 @@ func cycleSelectedInputFieldBackward() {
 
 }
 
+func getSelectPoints(buffer []rune, startIndex int) *Pair {
+
+	var start int
+	var end int
+	asRunes := buffer
+	var MAX_ASCII_VAL rune = 123
+	var MIN_ASCII_VAL rune = 64
+	var NULL_ASCII_VAL rune = 0
+
+	// Go forwards to get end
+	if startIndex < len(asRunes) {
+		for i := startIndex; i <= len(asRunes)-1; i++ {
+
+			var currentRune = asRunes[i]
+			if currentRune > MIN_ASCII_VAL && currentRune < MAX_ASCII_VAL && currentRune != NULL_ASCII_VAL {
+				continue
+			} else {
+				end = i
+				break
+			}
+		}
+	} else {
+		end = startIndex
+	}
+
+	// Go backwards to get start
+	for i := startIndex - 1; i >= 0; i-- {
+		var currentRune = asRunes[i]
+		if currentRune > MIN_ASCII_VAL && currentRune < MAX_ASCII_VAL && currentRune != NULL_ASCII_VAL {
+			continue
+		} else {
+			start = i + 1
+			break
+		}
+	}
+
+	return &Pair{start, end}
+}
+
+func selectWordInCurrentEditField() {
+	for e := range tabbableFields {
+		element := tabbableFields[e]
+
+		if element.Active == true {
+
+			// Find the previous non-alphabet character and the next one and
+			// select everything in between that.
+			// element.Cursor will give the current index of the cursor
+			cursorIndex := element.Cursor
+			currentBuffer := element.Buffer
+
+			var points *Pair = getSelectPoints(currentBuffer, cursorIndex)
+
+			element.SelectAll()
+			element.SelectStart = points.a.(int)
+			element.SelectEnd = points.b.(int)
+		}
+	}
+}
+
 func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 	responseField *nucular.TextEditor,
 	usernameField *nucular.TextEditor,
@@ -312,13 +372,13 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 				mw.SetPerf(!mw.GetPerf())
 
 				// Change request method binds
-			case (e.Modifiers == key.ModControl && (e.Code == key.CodeQ)):
+			case (e.Modifiers == key.ModControl && (e.Code == key.Code1)):
 				httpMethod = "GET"
-			case (e.Modifiers == key.ModControl && (e.Code == key.CodeW)):
+			case (e.Modifiers == key.ModControl && (e.Code == key.Code2)):
 				httpMethod = "PUT"
-			case (e.Modifiers == key.ModControl && (e.Code == key.CodeE)):
+			case (e.Modifiers == key.ModControl && (e.Code == key.Code3)):
 				httpMethod = "POST"
-			case (e.Modifiers == key.ModControl && (e.Code == key.CodeR)):
+			case (e.Modifiers == key.ModControl && (e.Code == key.Code4)):
 				httpMethod = "DELETE"
 
 				// Send HTTP request binds
@@ -377,6 +437,9 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 
 			case (e.Code == key.CodeTab):
 				cycleSelectedInputFieldForward()
+
+			case (e.Modifiers == key.ModControl && (e.Code == key.CodeW)):
+				selectWordInCurrentEditField()
 
 			}
 

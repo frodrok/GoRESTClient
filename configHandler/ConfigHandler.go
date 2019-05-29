@@ -164,9 +164,6 @@ func stringToHistoryEntry(s string) HistoryEntry {
 
 	histEntry := &HistoryEntry{}
 
-	println("received string:")
-	println(s)
-
 	splat := strings.Split(s, BASE64_SPLIT_PATTERN)
 
 	histEntry.Url = splat[0]
