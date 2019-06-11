@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	//	"strconv"
+
 	"github.com/aarzilli/nucular"
 	"github.com/go-xmlfmt/xmlfmt"
 	"github.com/yosssi/gohtml"
@@ -57,26 +59,6 @@ var httpMethod = "GET"
 var cHandler configHandler.ConfigHandlerActions
 
 var splith = &nucular.ScalableSplit{}
-
-type HttpHeaderDisplay struct {
-	enabled bool
-	name    string
-	value   string
-}
-
-var displayHeadersList = []*HttpHeaderDisplay{}
-
-var firstHeader = HttpHeaderDisplay{
-	true,
-	"Content-Type",
-	"application/json",
-}
-
-var secondHeader = HttpHeaderDisplay{
-	false,
-	"Accept",
-	"application/json",
-}
 
 // Construct the render function
 func textEditorDemo() func(w *nucular.Window) {
@@ -128,6 +110,9 @@ func textEditorDemo() func(w *nucular.Window) {
 		usernameEditorField.Buffer = []rune(lastHistoryEntry.Username)
 
 		passwordEditorField.Buffer = []rune(lastHistoryEntry.Password)
+
+		setupHeaderAreaFromHistory(&lastHistoryEntry.Headers)
+
 	}
 
 	tabbableFields = append(tabbableFields, &passwordEditorField)
@@ -144,11 +129,6 @@ func textEditorDemo() func(w *nucular.Window) {
 
 	fmt.Println("config", config)
 
-	displayHeadersList = append(displayHeadersList, &firstHeader)
-	displayHeadersList = append(displayHeadersList, &secondHeader)
-
-	var displayHeadersInputs []*nucular.TextEditor
-
 	// For each field in displayHeadersList create a nucular.TextEditor
 	// and add it to displayHeadersInputsList
 	for _, el := range displayHeadersList {
@@ -157,7 +137,6 @@ func textEditorDemo() func(w *nucular.Window) {
 		textEditor.Flags = nucular.EditSelectable | nucular.EditClipboard
 		displayHeadersInputs = append(displayHeadersInputs, &textEditor)
 		tabbableFields = append(tabbableFields, &textEditor)
-
 	}
 
 	// This is the render function, everything above it is called once upon initialization
@@ -176,13 +155,15 @@ func textEditorDemo() func(w *nucular.Window) {
 		usernameEditorField.Edit(w)
 		passwordEditorField.Edit(w)
 
+		// Only display the HTTP request body editor if the selected
+		// request is PUT or POST
 		if httpMethod == "PUT" || httpMethod == "POST" {
 			w.Row(100).Dynamic(1)
 
 			requestBodyEditorField.Edit(w)
 		}
 
-		renderRequestHeaders(w, &displayHeadersList, &displayHeadersInputs)
+		renderRequestHeaders(w)
 
 		w.Row(30).Dynamic(4)
 
@@ -191,43 +172,13 @@ func textEditorDemo() func(w *nucular.Window) {
 		w.LabelColored(status, "RT", colornames.Aquamarine)
 		w.LabelColored(responseContentType, "RT", colornames.Aquamarine)
 
-		//w.Row(500).Dynamic(1)
-		// Calculate 60% of the window height and set to that
+		// Calculate 60% of the window height and set the height to that
 		var fifty_percent float64 = float64(w.Bounds.H) * float64(0.6)
 		w.Row(int(fifty_percent)).Dynamic(1)
 
 		responseBodyEditor.Maxlen = 100000
 		responseBodyEditor.Edit(w)
 
-		//area := w.Row(0).SpaceBegin(0)
-
-		//viewbounds, commitbounds := splith.Horizontal(w, rect.Rect{0, 0, 150, 150})
-		//viewbounds, commitbounds := splith.Horizontal(w, area)
-
-		//w.LayoutSpacePushRatio(0, 500, 1, 0.6)
-
-		//responseBodyEditor.Maxlen = 100000
-		//responseBodyEditor.Edit(w)
-
-		//w.LayoutSpacePushScaled(viewbounds)
-		//w.LabelColored("my face is yours", "LT", colornames.Blueviolet)
-		//w.LayoutSpacePushScaled(commitbounds)
-		//w.LabelColored("my face is yours", "LT", colornames.Blueviolet)
-
-	}
-}
-
-func renderRequestHeaders(w *nucular.Window,
-	displayHeadersList *[]*HttpHeaderDisplay,
-	displayHeadersInputList *[]*nucular.TextEditor) {
-	w.Row(50).Dynamic(2)
-
-	displayHeaderStructs := *displayHeadersList
-	displayHeaderInputs := *displayHeadersInputList
-
-	for index, headerDisplay := range displayHeaderStructs {
-		w.CheckboxText(headerDisplay.name, &headerDisplay.enabled)
-		displayHeaderInputs[index].Edit(w)
 	}
 }
 
@@ -239,7 +190,7 @@ func cycleSelectedInputFieldForward() {
 	for e := range tabbableFields {
 		element := tabbableFields[e]
 
-		if element.Active == true {
+		if element.Active {
 
 			if e+1 > foldOver {
 				tabbableFields[0].Active = true
@@ -264,7 +215,7 @@ func cycleSelectedInputFieldBackward() {
 	for e := range tabbableFields {
 		element := tabbableFields[e]
 
-		if element.Active == true {
+		if element.Active {
 
 			if e-1 < 0 {
 				tabbableFields[foldOver].Active = true
@@ -323,7 +274,7 @@ func selectWordInCurrentEditField() {
 	for e := range tabbableFields {
 		element := tabbableFields[e]
 
-		if element.Active == true {
+		if element.Active {
 
 			// Find the previous non-alphabet character and the next one and
 			// select everything in between that.
@@ -356,6 +307,13 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 		for _, e := range k.Keys {
 			scaling := mw.Style().Scaling
 
+			fmt.Sprint(e.Code.String())
+
+			LOG(e.Code.String())
+			LOG(e.String())
+
+			fmt.Println(string(e.Rune) == "+")
+
 			switch {
 			case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Code == key.CodeEqualSign):
 				mw.Style().Scale(scaling + 0.1)
@@ -364,7 +322,7 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 			case (e.Modifiers == key.ModControl) && (e.Code == key.CodeF):
 				mw.SetPerf(!mw.GetPerf())
 
-				// Change request method binds
+			// Change request method binds
 			case (e.Modifiers == key.ModControl && (e.Code == key.Code1)):
 				httpMethod = "GET"
 			case (e.Modifiers == key.ModControl && (e.Code == key.Code2)):
@@ -374,13 +332,12 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 			case (e.Modifiers == key.ModControl && (e.Code == key.Code4)):
 				httpMethod = "DELETE"
 
-				// Send HTTP request binds
+			// Send HTTP request binds
 			case (e.Modifiers == key.ModControl && (e.Code == key.CodeReturnEnter)):
 
 				var request httpClient.HttpRequest
 
-				requestHeaders := createHeadersFromSelected(displayHeadersList,
-					displayHeadersInputs)
+				requestHeaders := getEnabledHeaders()
 
 				// Don't send a body in GET or DELETE requests
 				if httpMethod == "GET" || httpMethod == "DELETE" {
@@ -415,7 +372,7 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 
 				response := <-responses
 
-				// Check if we find any rune's with code 13 and clean the body if so :lenn:
+				// Check if we find any rune's with code 13 and clean the body if so
 				var clean = removeCRs(response.Body)
 
 				formattedBody := formatBody(clean, response.ContentType)
@@ -437,38 +394,21 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 			case (e.Modifiers == key.ModControl && (e.Code == key.CodeW)):
 				selectWordInCurrentEditField()
 
+			// Special case here, golang's event has no code for
+			// the symbol '+', so string compare it on the rune
+			case (e.Modifiers == key.ModControl && (string(e.Rune) == "+")):
+				startAddHeaderProcess()
 			}
 
 		}
 	}
 }
 
-func createHeadersFromSelected(display *[]*HttpHeaderDisplay,
-	inputFields []*nucular.TextEditor) map[string]string {
-
-	hest := *display
-
-	var resultingRequestHeaders = make(map[string]string)
-
-	for index, el := range hest {
-
-		val := string(inputFields[index].Buffer)
-
-		// For some reason the active/enabled value of nucular.CheckboxText is inverted
-		// Flip it
-		if !el.enabled {
-			resultingRequestHeaders[el.name] = val
-		}
-	}
-
-	return resultingRequestHeaders
-}
-
 func formatBody(body string, contentType string) string {
 
-	isHtml := strings.Index(contentType, "html") > -1
-	isXml := strings.Index(contentType, "xml") > -1
-	isJson := strings.Index(contentType, "json") > -1
+	isHtml := strings.Contains(contentType, "html")
+	isXml := strings.Contains(contentType, "xml")
+	isJson := strings.Contains(contentType, "json")
 
 	if isHtml {
 		return gohtml.Format(body)
@@ -481,10 +421,10 @@ func formatBody(body string, contentType string) string {
 	if isJson {
 
 		var prettyJson bytes.Buffer
-		error := json.Indent(&prettyJson, []byte(body), "", "  ")
+		err := json.Indent(&prettyJson, []byte(body), "", "  ")
 
-		if error != nil {
-			println("json parse error: ", error)
+		if err != nil {
+			println("json parse error: ", err)
 			return ""
 		}
 
