@@ -1,12 +1,25 @@
 package configHandler
 
 import (
-	b64 "encoding/base64"
+	"GoRESTClient/httpClient"
 	"encoding/json"
-	"io/ioutil"
-	"os"
-	"strings"
+	"fmt"
+	"time"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
+
+var db *leveldb.DB
+
+func LOG(s string) {
+	fmt.Printf("%s - %s\n", time.Now().Format("2009-09-01T15:04"), s)
+}
+
+type ConfigHandlerActions interface {
+	GetConfig() Configuration
+	AddRequestToHistory(h httpClient.HttpRequest) bool
+	GetRequestHistory() []httpClient.HttpRequest
+}
 
 type Environment struct {
 	name      string
@@ -25,187 +38,63 @@ type HistoryEntry struct {
 	Password string
 }
 
-type History struct {
-	Content []HistoryEntry
+type ConfigHandler struct {
+	filePath string
 }
 
-var HOME_PATH = os.Getenv("HOME")
+func NewConfigHandler(filePath string) (cHandler *ConfigHandler, err error) {
 
-var CONFIG_PATH = HOME_PATH + "/.gostman/config"
-
-func LoadConfig() (*Configuration, error) {
-
-	raw_bytes, err := ioutil.ReadFile(CONFIG_PATH)
+	db, err = leveldb.OpenFile(filePath, nil)
 
 	if err != nil {
-		// panic(err)
 		return nil, err
 	}
 
-	res := Configuration{}
-
-	smut := json.Unmarshal(raw_bytes, &res)
-
-	if smut != nil {
-		panic(smut)
-		return &res, err
-	}
-
-	return &res, nil
-
+	return &ConfigHandler{
+		filePath,
+	}, nil
 }
 
-func SaveConfig(conf *Configuration) bool {
+func (cHandler *ConfigHandler) GetConfig() Configuration {
+	return Configuration{[]Environment{}}
+}
 
-	var actual = *conf
-	var asJson, _ = json.Marshal(actual)
+func requestToJson(h httpClient.HttpRequest) string {
 
-	// Check if the folder exists
-	if _, err := os.Stat(HOME_PATH + "/.gostman"); os.IsNotExist(err) {
+	bytes, _ := json.Marshal(&h)
 
-		err := os.Mkdir(HOME_PATH+"/.gostman", 0755)
+	return string(bytes)
+}
 
-		if err != nil {
-			panic(err)
-		}
+func requestsToJson(h *[]httpClient.HttpRequest) string {
+	bytes, _ := json.Marshal(h)
+	return string(bytes)
+}
 
-	}
+func (cHandler *ConfigHandler) AddRequestToHistory(h httpClient.HttpRequest) bool {
 
-	err := ioutil.WriteFile(CONFIG_PATH, []byte(asJson), 0644)
+	storedRequests := cHandler.GetRequestHistory()
+
+	storedRequests = append(storedRequests, h)
+
+	asJson := requestsToJson(&storedRequests)
+
+	err := db.Put([]byte("history"), []byte(asJson), nil)
 
 	if err != nil {
-		panic(err)
+		LOG(err.Error())
 		return false
 	}
-
 	return true
-
 }
 
-func GetHistoryOrCreateHistoryFile() (*History, error) {
+func (*ConfigHandler) GetRequestHistory() []httpClient.HttpRequest {
 
-	/* Load history from file or return an empty history struct and err */
+	data, _ := db.Get([]byte("history"), nil)
 
-	var hist = History{}
+	var list []httpClient.HttpRequest
 
-	// Check if the folder exists
-	if _, err := os.Stat(HOME_PATH + "/.gostman"); os.IsNotExist(err) {
+	json.Unmarshal(data, &list)
 
-		err := os.Mkdir(HOME_PATH+"/.gostman", 0755)
-
-		if err != nil {
-			panic(err)
-		}
-
-	}
-
-	// If the history file doesn't exist, create it and return an empty history
-	if _, err := os.Stat(HOME_PATH + "/.gostman/history"); os.IsNotExist(err) {
-		err := ioutil.WriteFile(HOME_PATH+"/.gostman/history", []byte(nil), 0644)
-
-		if err != nil {
-			panic(err)
-		}
-
-		return &hist, nil
-
-	} else {
-
-		// If it exists unmarshal the content and return it
-		byhtes, err := ioutil.ReadFile(HOME_PATH + "/.gostman/history")
-
-		if err != nil {
-			panic(err)
-		}
-
-		str := string(byhtes)
-
-		println(len(str))
-
-		if len(str) < 1 {
-			return &hist, nil
-		}
-		var historyFileRows = strings.Split(str, "\n")
-
-		println("lenrows")
-		println(len(historyFileRows))
-
-		for _, entry := range historyFileRows {
-			// Base64 decode and add to hist.Content
-			raw, err := b64.StdEncoding.DecodeString(entry)
-
-			if err != nil {
-				continue
-			}
-
-			var histEntry = stringToHistoryEntry(string(raw))
-
-			hist.Content = append(hist.Content, histEntry)
-
-		}
-
-		//hist.Content = ff
-
-		return &hist, nil
-	}
-
-	return &hist, nil
-}
-
-func historyEntryToString(hist HistoryEntry) string {
-
-	// Base 64 encode url:username:password and store that
-	toEncode := hist.Url + BASE64_SPLIT_PATTERN + hist.Username + BASE64_SPLIT_PATTERN + hist.Password
-	encoded := b64.StdEncoding.EncodeToString([]byte(toEncode))
-	return encoded
-}
-
-func stringToHistoryEntry(s string) HistoryEntry {
-
-	histEntry := &HistoryEntry{}
-
-	splat := strings.Split(s, BASE64_SPLIT_PATTERN)
-
-	histEntry.Url = splat[0]
-	histEntry.Username = splat[1]
-	histEntry.Password = splat[2]
-
-	return *histEntry
-}
-
-func SaveToHistory(url string,
-	username string,
-	password string) bool {
-
-	// hist is a pointer to a History struct
-	var hist, err = GetHistoryOrCreateHistoryFile()
-
-	if err != nil {
-		panic(err)
-	}
-
-	entry := &HistoryEntry{
-		url,
-		username,
-		password,
-	}
-
-	hist.Content = append(hist.Content, *entry)
-
-	var asStrings []string
-
-	for _, content := range hist.Content {
-		asString := historyEntryToString(content)
-		asStrings = append(asStrings, asString)
-	}
-
-	asFinalString := strings.Join(asStrings, "\n")
-
-	if err := ioutil.WriteFile(HOME_PATH+"/.gostman/history", []byte(asFinalString), 0644); err != nil {
-		panic(err)
-		return false
-	}
-
-	return true
-
+	return list
 }

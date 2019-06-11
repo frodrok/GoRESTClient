@@ -1,4 +1,4 @@
-package main
+package httpClient
 
 import (
 	"bytes"
@@ -9,21 +9,23 @@ import (
 	//	"strconv"
 )
 
+var client = &http.Client{}
+
 type HttpResponse struct {
-	status        int
-	statusString  string
-	body          string
-	contentType   string
-	contentLength string
+	Status        int
+	StatusString  string
+	Body          string
+	ContentType   string
+	ContentLength string
 }
 
 type HttpRequest struct {
-	method   string
-	url      string
-	username string
-	password string
-	body     string
-	headers  map[string]string
+	Method   string
+	Url      string
+	Username string
+	Password string
+	Body     string
+	Headers  map[string]string
 }
 
 func basicAuth(username string, password string) string {
@@ -37,12 +39,12 @@ func CallHttp(req *HttpRequest) HttpResponse {
 
 	/* Receive a pointer to a HttpRequest - extract data, perform HTTP request
 	and return the result as a HttpResponse */
-	bodyBuffer := bytes.NewBuffer([]byte(req.body))
+	bodyBuffer := bytes.NewBuffer([]byte(req.Body))
 
-	var newRequest, err = http.NewRequest(req.method, req.url, bodyBuffer)
+	var newRequest, err = http.NewRequest(req.Method, req.Url, bodyBuffer)
 
-	if req.headers != nil {
-		for key, value := range req.headers {
+	if req.Headers != nil {
+		for key, value := range req.Headers {
 			newRequest.Header.Add(key, value)
 		}
 	}
@@ -59,7 +61,7 @@ func CallHttp(req *HttpRequest) HttpResponse {
 
 	}
 
-	newRequest.Header.Add("Authorization", "Basic "+basicAuth(req.username, req.password))
+	newRequest.Header.Add("Authorization", "Basic "+basicAuth(req.Username, req.Password))
 
 	resp, err := client.Do(newRequest)
 
@@ -83,11 +85,11 @@ func CallHttp(req *HttpRequest) HttpResponse {
 	//LOG(strconv.Itoa(resp.StatusCode))
 
 	return HttpResponse{
-		status:        resp.StatusCode,
-		statusString:  resp.Status,
-		body:          string(body),
-		contentType:   resp.Header.Get("Content-Type"),
-		contentLength: resp.Header.Get("Content-Length"),
+		Status:        resp.StatusCode,
+		StatusString:  resp.Status,
+		Body:          string(body),
+		ContentType:   resp.Header.Get("Content-Type"),
+		ContentLength: resp.Header.Get("Content-Length"),
 	}
 }
 
@@ -128,10 +130,10 @@ func CallHttpSimple(method string, url string) HttpResponse {
 	}
 
 	return HttpResponse{
-		status:        resp.StatusCode,
-		body:          string(body),
-		contentType:   resp.Header.Get("Content-Type"),
-		contentLength: resp.Header.Get("Content-Length"),
+		Status:        resp.StatusCode,
+		Body:          string(body),
+		ContentType:   resp.Header.Get("Content-Type"),
+		ContentLength: resp.Header.Get("Content-Length"),
 	}
 
 }

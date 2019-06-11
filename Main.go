@@ -2,13 +2,13 @@ package main
 
 import (
 	"GoRESTClient/configHandler"
+	"GoRESTClient/httpClient"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"image"
 
 	//"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -41,22 +41,20 @@ func main() {
 	Wnd.Main()
 }
 
-var status = "http status"
-var responseContentType string = "content type"
+var status = "Status"
+var responseContentType string = "Content Type"
 var tabbableFields []*nucular.TextEditor
 
 type Pair struct {
 	a, b interface{}
 }
 
-// Load these default values from config file
+// Default values unless history is found
 var auth = Pair{"admin", "admin"}
 
-var client = &http.Client{}
 var httpMethod = "GET"
-var HistoryStruct, _ = configHandler.GetHistoryOrCreateHistoryFile()
 
-var history []configHandler.HistoryEntry = HistoryStruct.Content
+var cHandler configHandler.ConfigHandlerActions
 
 var splith = &nucular.ScalableSplit{}
 
@@ -68,13 +66,13 @@ type HttpHeaderDisplay struct {
 
 var displayHeadersList = []*HttpHeaderDisplay{}
 
-var wutface = HttpHeaderDisplay{
+var firstHeader = HttpHeaderDisplay{
 	true,
 	"Content-Type",
 	"application/json",
 }
 
-var wutface2 = HttpHeaderDisplay{
+var secondHeader = HttpHeaderDisplay{
 	false,
 	"Accept",
 	"application/json",
@@ -88,6 +86,15 @@ func textEditorDemo() func(w *nucular.Window) {
 
 	urlEditorField.Maxlen = 1000
 	urlEditorField.Active = true
+
+	// Instantiate configHandler
+	cHandler, _ = configHandler.NewConfigHandler("/home/fredrik/.gostman")
+
+	// Load history
+	var history = cHandler.GetRequestHistory()
+
+	// Load config
+	config := cHandler.GetConfig()
 
 	tabbableFields = append(tabbableFields, &urlEditorField)
 
@@ -116,13 +123,11 @@ func textEditorDemo() func(w *nucular.Window) {
 
 		var lastHistoryEntry = history[len(history)-1]
 
-		urlFieldValue := lastHistoryEntry.Url
-		urlEditorField.Buffer = []rune(urlFieldValue)
+		urlEditorField.Buffer = []rune(lastHistoryEntry.Url)
 
 		usernameEditorField.Buffer = []rune(lastHistoryEntry.Username)
 
 		passwordEditorField.Buffer = []rune(lastHistoryEntry.Password)
-
 	}
 
 	tabbableFields = append(tabbableFields, &passwordEditorField)
@@ -137,24 +142,10 @@ func textEditorDemo() func(w *nucular.Window) {
 	splith.Size = 120
 	splith.Spacing = 5
 
-	history, err := configHandler.GetHistoryOrCreateHistoryFile()
-
-	if err != nil {
-		println("could not load history")
-	}
-
-	fmt.Println("main history", history.Content)
-
-	config, err := configHandler.LoadConfig()
-
-	if err != nil {
-		println("could not load config")
-	}
-
 	fmt.Println("config", config)
 
-	displayHeadersList = append(displayHeadersList, &wutface)
-	displayHeadersList = append(displayHeadersList, &wutface2)
+	displayHeadersList = append(displayHeadersList, &firstHeader)
+	displayHeadersList = append(displayHeadersList, &secondHeader)
 
 	var displayHeadersInputs []*nucular.TextEditor
 
@@ -174,7 +165,8 @@ func textEditorDemo() func(w *nucular.Window) {
 
 		handleKeybindings(w, &urlEditorField, &responseBodyEditor,
 			&usernameEditorField, &passwordEditorField,
-			&requestBodyEditorField, &displayHeadersList, displayHeadersInputs)
+			&requestBodyEditorField, &displayHeadersList, displayHeadersInputs,
+			cHandler)
 
 		w.Row(30).Static(50, 500, 125, 125)
 
@@ -354,7 +346,8 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 	passwordField *nucular.TextEditor,
 	requestBodyField *nucular.TextEditor,
 	displayHeadersList *[]*HttpHeaderDisplay,
-	displayHeadersInputs []*nucular.TextEditor) {
+	displayHeadersInputs []*nucular.TextEditor,
+	cHandler configHandler.ConfigHandlerActions) {
 
 	mw := w.Master()
 
@@ -384,7 +377,7 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 				// Send HTTP request binds
 			case (e.Modifiers == key.ModControl && (e.Code == key.CodeReturnEnter)):
 
-				var request HttpRequest
+				var request httpClient.HttpRequest
 
 				requestHeaders := createHeadersFromSelected(displayHeadersList,
 					displayHeadersInputs)
@@ -392,7 +385,7 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 				// Don't send a body in GET or DELETE requests
 				if httpMethod == "GET" || httpMethod == "DELETE" {
 
-					request = HttpRequest{
+					request = httpClient.HttpRequest{
 						httpMethod,
 						string(urlField.Buffer),
 						string(usernameField.Buffer),
@@ -403,7 +396,7 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 
 				} else {
 
-					request = HttpRequest{
+					request = httpClient.HttpRequest{
 						httpMethod,
 						string(urlField.Buffer),
 						string(usernameField.Buffer),
@@ -413,29 +406,27 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 					}
 				}
 
-				responses := make(chan HttpResponse)
+				responses := make(chan httpClient.HttpResponse)
 
 				go func() {
-					var response = CallHttp(&request)
+					var response = httpClient.CallHttp(&request)
 					responses <- response
 				}()
 
 				response := <-responses
 
 				// Check if we find any rune's with code 13 and clean the body if so :lenn:
-				var clean = removeCRs(response.body)
+				var clean = removeCRs(response.Body)
 
-				formattedBody := formatBody(clean, response.contentType)
+				formattedBody := formatBody(clean, response.ContentType)
 
 				responseField.Buffer = []rune(formattedBody)
 
-				status = response.statusString
-				responseContentType = response.contentType
+				status = response.StatusString
+				responseContentType = response.ContentType
 
-				// Store url and credentials in history
-				configHandler.SaveToHistory(string(urlField.Buffer),
-					string(usernameField.Buffer),
-					string(passwordField.Buffer))
+				// Store url, headers and credentials in history
+				cHandler.AddRequestToHistory(request)
 
 			case (e.Modifiers == key.ModShift && (e.Code == key.CodeTab)):
 				cycleSelectedInputFieldBackward()

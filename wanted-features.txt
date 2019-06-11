@@ -1,13 +1,15 @@
-Ctrl+W selects a word in editors (rudamentary implementation)
-Request headers are saved with the request history
+Restore headers from history
 Be able to add and remove headers
 Be able to use variables and environment variables
-
-Rewrite configHandler to use LevelDB
 Be able to set custom keybindings
 Use channels to make http call and call back with the result
 Syntax highlighting in the request and response editors
 Auto fill URL field based on previous requests
+Set different file path of the config depending on operating system and 
+	home folder path
 
+Ctrl+W selects a word in editors (rudamentary implementation)
+Request headers are saved with the request history (implemented)
+Rewrite configHandler to use LevelDB (implemented)
 Response body fills up the whole editor (implemented)
 Save and restore credentials with request history (implemented)
