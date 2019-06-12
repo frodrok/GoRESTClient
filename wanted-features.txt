@@ -6,7 +6,8 @@ Syntax highlighting in the request and response editors
 Auto fill URL field based on previous requests
 Set different file path of the config depending on operating system and 
 	home folder path
-Clean up XML bodies 
+Clean up XML bodies
+Check if request body should be tabbed to when cycling tabbable fields
 Start writing unit tests
 	Tests:
 	* Tabbable fields should work

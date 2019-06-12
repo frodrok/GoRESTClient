@@ -16,6 +16,7 @@ import (
 	//	"strconv"
 
 	"github.com/aarzilli/nucular"
+	nstyle "github.com/aarzilli/nucular/style"
 	"github.com/go-xmlfmt/xmlfmt"
 	"github.com/yosssi/gohtml"
 	"golang.org/x/image/colornames"
@@ -40,7 +41,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	Wnd.SetStyle(nstyle.FromTheme(nstyle.WhiteTheme, 1.0))
+
 	Wnd.Main()
+
 }
 
 var status = "Status"
@@ -190,7 +194,9 @@ func cycleSelectedInputFieldForward() {
 	for e := range tabbableFields {
 		element := tabbableFields[e]
 
-		if element.Active {
+		if element.Active && (element.Flags&nucular.EditMultiline == 0) {
+
+			println((element.Flags & nucular.EditMultiline))
 
 			if e+1 > foldOver {
 				tabbableFields[0].Active = true
@@ -215,7 +221,9 @@ func cycleSelectedInputFieldBackward() {
 	for e := range tabbableFields {
 		element := tabbableFields[e]
 
-		if element.Active {
+		// Switch fields if we're on an active one and it's
+		// not a multiline field (because then we want to insert the tab)
+		if element.Active && (element.Flags&nucular.EditMultiline == 0) {
 
 			if e-1 < 0 {
 				tabbableFields[foldOver].Active = true
@@ -307,12 +315,8 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 		for _, e := range k.Keys {
 			scaling := mw.Style().Scaling
 
-			fmt.Sprint(e.Code.String())
-
-			LOG(e.Code.String())
+			LOG("code: " + e.Code.String())
 			LOG(e.String())
-
-			fmt.Println(string(e.Rune) == "+")
 
 			switch {
 			case (e.Modifiers == key.ModControl || e.Modifiers == key.ModControl|key.ModShift) && (e.Code == key.CodeEqualSign):
