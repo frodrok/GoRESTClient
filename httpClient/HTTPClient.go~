@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strconv"
+	//	"strconv"
 )
 
 var client = &http.Client{}
@@ -40,9 +40,6 @@ func CallHttp(req *HttpRequest) HttpResponse {
 	/* Receive a pointer to a HttpRequest - extract data, perform HTTP request
 	and return the result as a HttpResponse */
 	bodyBuffer := bytes.NewBuffer([]byte(req.Body))
-	fmt.Println("CallHttp")
-	fmt.Println(req.Method)
-	fmt.Println(req.Url)
 
 	var newRequest, err = http.NewRequest(req.Method, req.Url, bodyBuffer)
 
@@ -53,8 +50,6 @@ func CallHttp(req *HttpRequest) HttpResponse {
 	}
 
 	if err != nil {
-
-		fmt.Println("err!")
 
 		return HttpResponse{
 			500,
@@ -72,8 +67,6 @@ func CallHttp(req *HttpRequest) HttpResponse {
 
 	if err != nil {
 
-		fmt.Println("err!")
-
 		return HttpResponse{
 			500,
 			"",
@@ -88,8 +81,8 @@ func CallHttp(req *HttpRequest) HttpResponse {
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	fmt.Println(string(body))
-	fmt.Println(strconv.Itoa(resp.StatusCode))
+	//LOG(string(body))
+	//LOG(strconv.Itoa(resp.StatusCode))
 
 	return HttpResponse{
 		Status:        resp.StatusCode,

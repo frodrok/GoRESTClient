@@ -3,6 +3,8 @@ package main
 import (
 	"GoRESTClient/configHandler"
 	"GoRESTClient/httpClient"
+	//	"configHandler"
+	//	"httpClient"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -146,10 +148,10 @@ func textEditorDemo() func(w *nucular.Window) {
 	// This is the render function, everything above it is called once upon initialization
 	return func(w *nucular.Window) {
 
-		handleKeybindings(w, &urlEditorField, &responseBodyEditor,
+		/*handleKeybindings(w, &urlEditorField, &responseBodyEditor,
 			&usernameEditorField, &passwordEditorField,
 			&requestBodyEditorField, &displayHeadersList, displayHeadersInputs,
-			cHandler)
+			cHandler)*/
 
 		w.Row(30).Static(50, 500, 125, 125)
 
@@ -310,6 +312,7 @@ func handleKeybindings(w *nucular.Window, urlField *nucular.TextEditor,
 
 	mw := w.Master()
 
+	// This one hangs I think
 	if in := w.Input(); in != nil {
 		k := in.Keyboard
 		for _, e := range k.Keys {
